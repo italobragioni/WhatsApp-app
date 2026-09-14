@@ -1,0 +1,377 @@
+// =============================================================================
+// VENDEIA - Prisma schema
+// -----------------------------------------------------------------------------
+// Data model for the full system. Single-tenant today, but every domain table
+// carries an optional `ownerId` -> User relation so a future multi-tenant/SaaS
+// migration can scope rows per account without a full rewrite.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  AGENT
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+
+enum ConversationChannel {
+  WHATSAPP
+  MANUAL
+}
+
+/// Controls whether the AI agent may respond automatically in a conversation.
+enum AgentMode {
+  ACTIVE // AI responds automatically
+  PAUSED // AI temporarily silenced
+  HUMAN // handed off to a human operator; AI must not respond
+}
+
+enum MessageSender {
+  CUSTOMER
+  AGENT // AI-generated
+  HUMAN // human operator
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  AUDIO
+  IMAGE
+  DOCUMENT
+  LOCATION
+  SYSTEM
+}
+
+enum OrderStatus {
+  DRAFT
+  AWAITING_INFO
+  DELIVERY_CHECK
+  CHECKOUT_SENT
+  PLACED
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+/// External services the system will integrate with. Used to tag integration
+/// events and (later) route provider calls.
+enum IntegrationProviderType {
+  WHATSAPP
+  LOGZZ
+  AI
+}
+
+/// Conversation state machine for the AI sales agent (see src/server/ai).
+enum SalesStage {
+  NEW_CONTACT
+  DISCOVERING_NEED
+  PRESENTING_PRODUCT
+  ANSWERING_QUESTION
+  HANDLING_OBJECTION
+  PURCHASE_INTENT
+  COLLECTING_DATA
+  CHECKING_DELIVERY
+  SENDING_CHECKOUT
+  ORDER_PLACED
+  POST_SALE
+  HANDOFF_HUMAN
+}
+
+enum KnowledgeCategory {
+  GENERAL
+  FEATURE
+  BENEFIT
+  FAQ
+  OBJECTION
+  PAYMENT
+  DELIVERY
+  WARRANTY
+  SALES_ARGUMENT
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+// -----------------------------------------------------------------------------
+// Identity
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(ADMIN)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Ownership relations (foundation for future multi-tenant scoping).
+  products      Product[]
+  customers     Customer[]
+  conversations Conversation[]
+  orders        Order[]
+  agentSettings AgentSettings?
+
+  @@index([email])
+}
+
+// -----------------------------------------------------------------------------
+// Catalog
+// -----------------------------------------------------------------------------
+
+model Product {
+  id          String  @id @default(cuid())
+  ownerId     String?
+  name        String
+  slug        String  @unique
+  description String? @db.Text
+  /// Price stored in cents to avoid floating-point rounding issues.
+  priceCents  Int     @default(0)
+  currency    String  @default("BRL")
+
+  benefits        String[] @default([])
+  features        String[] @default([])
+  salesArguments  String[] @default([])
+  warranty        String?  @db.Text
+  deliveryInfo    String?  @db.Text
+  paymentInfo     String?  @db.Text
+  /// Explicit boundaries for the AI agent (see principle: never invent info).
+  aiAllowedTopics    String[] @default([])
+  aiForbiddenTopics  String[] @default([])
+  /// Filled only once a real Logzz checkout link exists. Never invented.
+  checkoutUrl String?
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner          User?              @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  knowledgeItems ProductKnowledge[]
+  orders         Order[]
+  conversations  Conversation[]
+
+  @@index([ownerId])
+  @@index([active])
+}
+
+/// Curated, source-of-truth knowledge the AI agent is allowed to use.
+model ProductKnowledge {
+  id        String            @id @default(cuid())
+  productId String
+  category  KnowledgeCategory @default(GENERAL)
+  question  String?           @db.Text
+  answer    String?           @db.Text
+  content   String            @db.Text
+  /// Higher priority items are preferred when building agent context.
+  priority  Int               @default(0)
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([productId, category])
+  @@index([priority])
+}
+
+// -----------------------------------------------------------------------------
+// CRM
+// -----------------------------------------------------------------------------
+
+model Customer {
+  id      String  @id @default(cuid())
+  ownerId String?
+  name    String?
+  /// E.164 phone number, primary identity from WhatsApp. Unique per owner space.
+  phone   String  @unique
+  email   String?
+
+  addressLine  String?
+  number       String?
+  complement   String?
+  district     String?
+  city         String?
+  state        String?
+  postalCode   String?
+
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner         User?          @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  conversations Conversation[]
+  orders        Order[]
+
+  @@index([ownerId])
+  @@index([phone])
+}
+
+// -----------------------------------------------------------------------------
+// Conversations & messages
+// -----------------------------------------------------------------------------
+
+model Conversation {
+  id         String              @id @default(cuid())
+  ownerId    String?
+  customerId String
+  productId  String?
+  status     ConversationStatus  @default(OPEN)
+  channel    ConversationChannel @default(WHATSAPP)
+  /// Current agent posture. HUMAN means the AI must not auto-respond.
+  agentMode  AgentMode           @default(ACTIVE)
+  /// Current stage in the sales state machine.
+  stage      SalesStage          @default(NEW_CONTACT)
+  lastMessageAt DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  owner    User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  messages Message[]
+  orders   Order[]
+
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([status])
+  @@index([agentMode])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  sender         MessageSender
+  type           MessageType   @default(TEXT)
+  /// Text content or transcription. Media lives via `mediaUrl`/`metadata`.
+  content        String        @db.Text
+  mediaUrl       String?
+  /// Arbitrary structured data (provider ids, media meta, transcription info).
+  metadata       Json?
+  /// Provider-side message id, used to deduplicate inbound webhooks.
+  externalId     String?
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, externalId])
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// Orders
+// -----------------------------------------------------------------------------
+
+model Order {
+  id             String      @id @default(cuid())
+  ownerId        String?
+  customerId     String
+  productId      String?
+  conversationId String?
+  status         OrderStatus @default(DRAFT)
+  /// Total amount in cents.
+  amountCents    Int         @default(0)
+  currency       String      @default("BRL")
+  /// Id returned by the external order provider (e.g. Logzz). Never invented.
+  externalId     String?
+  /// Snapshot of the delivery data used for this order.
+  deliveryData   Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  owner        User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product      Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([status])
+  @@index([externalId])
+}
+
+// -----------------------------------------------------------------------------
+// Integrations & observability
+// -----------------------------------------------------------------------------
+
+/// Raw inbound/outbound events from external providers (webhooks, callbacks).
+/// Stored before processing so nothing is lost and duplicates can be detected.
+model IntegrationEvent {
+  id         String                  @id @default(cuid())
+  provider   IntegrationProviderType
+  eventType  String
+  /// Provider-side identifier used for idempotent processing.
+  externalId String?
+  direction  String                  @default("inbound")
+  payload    Json
+  processed   Boolean                @default(false)
+  processedAt DateTime?
+  error       String?                @db.Text
+  createdAt   DateTime               @default(now())
+
+  @@unique([provider, externalId])
+  @@index([provider, processed])
+  @@index([createdAt])
+}
+
+/// Agent behavior configuration. Single row today (one per owner).
+model AgentSettings {
+  id            String  @id @default(cuid())
+  ownerId       String? @unique
+  personality   String  @default("Consultivo, cordial e objetivo.") @db.Text
+  tone          String  @default("Profissional e amigável.")
+  /// Hard rules the agent must always follow.
+  rules         String[] @default([])
+  /// Sales objectives that guide the conversation.
+  objectives    String[] @default([])
+  /// Canned default messages (greeting, fallback, handoff, out-of-hours...).
+  defaultMessages Json?
+  /// Business hours definition (structure defined by the app layer).
+  businessHours Json?
+  /// Conditions that should trigger a human handoff.
+  handoffRules  String[] @default([])
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  owner User? @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+/// Structured application logs / observability (no secrets, ever).
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     LogLevel @default(INFO)
+  scope     String
+  message   String   @db.Text
+  /// Structured context. Must never contain tokens/secrets.
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([level])
+  @@index([scope])
+  @@index([createdAt])
+}

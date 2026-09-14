@@ -1,0 +1,55 @@
+import { type Order, OrderStatus, type Prisma } from "@prisma/client";
+
+import { prisma } from "@/server/db/prisma";
+
+/** Order business logic. External fulfillment (Logzz) is wired later. */
+
+export type OrderWithRelations = Prisma.OrderGetPayload<{
+  include: { customer: true; product: true };
+}>;
+
+export async function listOrders(): Promise<OrderWithRelations[]> {
+  return prisma.order.findMany({
+    include: { customer: true, product: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getOrder(id: string): Promise<OrderWithRelations | null> {
+  return prisma.order.findUnique({
+    where: { id },
+    include: { customer: true, product: true },
+  });
+}
+
+export interface CreateDraftOrderInput {
+  customerId: string;
+  productId?: string;
+  conversationId?: string;
+  amountCents?: number;
+  currency?: string;
+}
+
+/** Create a local draft order. It is only sent to Logzz once that integration
+ *  exists and the required data is confirmed. */
+export async function createDraftOrder(
+  input: CreateDraftOrderInput,
+): Promise<Order> {
+  return prisma.order.create({
+    data: {
+      customerId: input.customerId,
+      productId: input.productId,
+      conversationId: input.conversationId,
+      amountCents: input.amountCents ?? 0,
+      currency: input.currency ?? "BRL",
+      status: OrderStatus.DRAFT,
+    },
+  });
+}
+
+export async function updateOrderStatus(
+  id: string,
+  status: OrderStatus,
+): Promise<Order> {
+  return prisma.order.update({ where: { id }, data: { status } });
+}
