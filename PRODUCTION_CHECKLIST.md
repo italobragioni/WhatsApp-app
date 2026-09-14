@@ -25,7 +25,6 @@ Classificação:
 | `WHATSAPP_APP_SECRET` | PRODUÇÃO | Habilita verificação de assinatura `X-Hub-Signature-256`. |
 | `WHATSAPP_AUDIO_MAX_BYTES` | OPCIONAL | Default 16MB. |
 | `LOGZZ_WEBHOOK_SECRET` | PRODUÇÃO (p/ sincronizar pedidos) | Autentica o webhook da Logzz. |
-| `LOGZZ_ACCOUNT_ID` | OPCIONAL | Só exibição. |
 
 ## Checklist
 

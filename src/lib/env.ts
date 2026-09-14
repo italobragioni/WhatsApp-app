@@ -7,40 +7,57 @@ import { z } from "zod";
  * future integrations (WhatsApp, Logzz, AI provider) are intentionally left
  * out until those integrations are implemented.
  */
+
+/**
+ * Wrap an OPTIONAL variable's schema so that an empty/whitespace-only string is
+ * treated as "not set" (undefined) BEFORE validation. This prevents a boot
+ * failure when a hosting provider (e.g. Vercel) stores an optional variable as
+ * an empty string `""` instead of leaving it absent. Real, non-empty values
+ * still go through the original validation (min length, url, positive, ...).
+ */
+function optional<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    schema.optional(),
+  );
+}
+
 const serverEnvSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  // Required — an empty value must fail (these are not optional).
   DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }),
   AUTH_SECRET: z
     .string()
     .min(16, { message: "AUTH_SECRET must be at least 16 characters" }),
-  NEXTAUTH_URL: z.string().url().optional(),
+  NEXTAUTH_URL: optional(z.string().url()),
 
   // -- AI provider (optional) --------------------------------------------------
   // When OPENAI_API_KEY is absent the agent degrades gracefully: the panel
   // shows a friendly "AI not configured" message instead of crashing.
   AI_PROVIDER: z.enum(["openai"]).default("openai"),
-  OPENAI_API_KEY: z.string().min(1).optional(),
-  AI_MODEL: z.string().min(1).optional(),
+  OPENAI_API_KEY: optional(z.string().min(1)),
+  AI_MODEL: optional(z.string().min(1)),
   // Audio transcription (reuses OPENAI_API_KEY; no separate key).
-  OPENAI_TRANSCRIPTION_MODEL: z.string().min(1).optional(),
+  OPENAI_TRANSCRIPTION_MODEL: optional(z.string().min(1)),
 
   // -- WhatsApp Business Platform / Cloud API (optional) -----------------------
   // Absent = integration "not configured": the app still runs, the webhook
   // answers verification, and the panel shows a "not configured" status.
   // These are read ONLY through src/server/integrations/whatsapp/config.ts.
-  WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
-  WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
-  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().min(1).optional(),
-  WHATSAPP_VERIFY_TOKEN: z.string().min(1).optional(),
-  WHATSAPP_API_VERSION: z.string().min(1).optional(),
+  WHATSAPP_ACCESS_TOKEN: optional(z.string().min(1)),
+  WHATSAPP_PHONE_NUMBER_ID: optional(z.string().min(1)),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: optional(z.string().min(1)),
+  WHATSAPP_VERIFY_TOKEN: optional(z.string().min(1)),
+  WHATSAPP_API_VERSION: optional(z.string().min(1)),
   // App Secret enables X-Hub-Signature-256 verification of inbound webhooks
   // (recommended in production). Optional: without it the signature check is
   // skipped (a warning is logged) and only the verify-token handshake applies.
-  WHATSAPP_APP_SECRET: z.string().min(1).optional(),
+  WHATSAPP_APP_SECRET: optional(z.string().min(1)),
   // Max size (bytes) of an inbound audio we will download/transcribe.
-  WHATSAPP_AUDIO_MAX_BYTES: z.coerce.number().int().positive().optional(),
+  WHATSAPP_AUDIO_MAX_BYTES: optional(z.coerce.number().int().positive()),
 
   // -- Logzz (optional) --------------------------------------------------------
   // Logzz has NO public REST API for creating orders or querying delivery/
@@ -49,9 +66,7 @@ const serverEnvSchema = z.object({
   // Shared secret used to authenticate inbound Logzz webhook calls (our own
   // safeguard: the merchant embeds it in the configured webhook URL as ?token=
   // or sends it in the x-logzz-token header). Read ONLY via logzz/config.ts.
-  LOGZZ_WEBHOOK_SECRET: z.string().min(1).optional(),
-  // Non-sensitive account identifier, for display only.
-  LOGZZ_ACCOUNT_ID: z.string().min(1).optional(),
+  LOGZZ_WEBHOOK_SECRET: optional(z.string().min(1)),
 });
 
 const parsed = serverEnvSchema.safeParse(process.env);

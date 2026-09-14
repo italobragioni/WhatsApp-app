@@ -19,13 +19,11 @@ import { env } from "@/lib/env";
 
 export interface LogzzConfig {
   webhookSecret?: string;
-  accountId?: string;
 }
 
 export function getLogzzConfig(): LogzzConfig {
   return {
     webhookSecret: env.LOGZZ_WEBHOOK_SECRET,
-    accountId: env.LOGZZ_ACCOUNT_ID,
   };
 }
 
@@ -56,13 +54,11 @@ export type LogzzStatus = "configured" | "not_configured";
 /** Safe status for the admin UI. Never exposes the secret. */
 export function getLogzzStatus(): {
   status: LogzzStatus;
-  accountId?: string;
   signatureVerification: boolean;
   capabilities: typeof LOGZZ_CAPABILITIES;
 } {
   return {
     status: isLogzzWebhookConfigured() ? "configured" : "not_configured",
-    accountId: env.LOGZZ_ACCOUNT_ID,
     signatureVerification: isLogzzWebhookConfigured(),
     capabilities: LOGZZ_CAPABILITIES,
   };

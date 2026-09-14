@@ -216,11 +216,6 @@ export default function IntegrationsPage() {
           </div>
         </div>
 
-        {logzz.accountId ? (
-          <p className="mt-3 text-xs text-slate-400">
-            Account ID: {logzz.accountId}
-          </p>
-        ) : null}
         <div className="mt-3 border-t pt-3 text-xs text-slate-500">
           <p>
             URL do webhook:{" "}

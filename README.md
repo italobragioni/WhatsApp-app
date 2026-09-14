@@ -246,7 +246,6 @@ você"* e conduz ao checkout.
 - `LOGZZ_WEBHOOK_SECRET` — segredo compartilhado para autenticar o webhook.
   Como a Logzz não documenta assinatura, o lojista embute o token na URL do
   webhook (`?token=...`) ou no header `x-logzz-token`. **Não há** API url/token.
-- `LOGZZ_ACCOUNT_ID` — identificador não sensível, só para exibição.
 - **URL do webhook:** `https://SEU_DOMINIO/api/webhooks/logzz?token=<LOGZZ_WEBHOOK_SECRET>`
 - **Mapeamento recomendado no painel Logzz** (chaves canônicas que consumimos;
   também aceitamos variações como `cliente_name`, `order_quantity`):
