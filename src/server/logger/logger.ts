@@ -26,17 +26,35 @@ const SENSITIVE_KEYS = [
   "cookie",
 ];
 
+/** True when a key name looks sensitive (substring match, case-insensitive). */
+function isSensitiveKey(key: string): boolean {
+  const k = key.toLowerCase();
+  return SENSITIVE_KEYS.some((s) => k.includes(s));
+}
+
+/**
+ * Recursively redact sensitive keys. Depth-capped so a pathological or cyclic
+ * structure can never hang the logger. Redaction is by key name at any depth,
+ * so a nested `{ headers: { Authorization: "Bearer ..." } }` is masked.
+ */
+function redact(value: unknown, depth = 0): unknown {
+  if (depth > 6 || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = isSensitiveKey(key) ? "[REDACTED]" : redact(val, depth + 1);
+  }
+  return out;
+}
+
 function sanitizeContext(context?: LogContext): LogContext | undefined {
   if (!context) return undefined;
-  const clean: LogContext = {};
-  for (const [key, value] of Object.entries(context)) {
-    if (SENSITIVE_KEYS.includes(key.toLowerCase())) {
-      clean[key] = "[REDACTED]";
-    } else {
-      clean[key] = value;
-    }
-  }
-  return clean;
+  return redact(context) as LogContext;
+}
+
+/** Exposed for tests: redact sensitive keys (recursively) from a context. */
+export function redactLogContext(context: LogContext): LogContext {
+  return sanitizeContext(context) ?? {};
 }
 
 async function persist(

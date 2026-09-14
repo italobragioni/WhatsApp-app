@@ -8,15 +8,34 @@ import type {
   SalesStage,
 } from "@prisma/client";
 
-import type { NotImplementedError } from "@/server/integrations/types";
-
 /**
  * AI Sales Agent contracts.
  * -----------------------------------------------------------------------------
  * Defines the shape of the input the agent receives and the structured output
- * it produces. The actual text generation depends on an external AI provider,
- * which is NOT connected yet (see `AiProvider` and `SalesAgent`).
+ * it produces. Text generation is delegated to a swappable `AiProvider`
+ * (see ./provider.ts). No external messaging/fulfillment integrations here.
  */
+
+/** Intents the agent must be able to recognize from the customer's message. */
+export type CustomerIntent =
+  | "GREETING"
+  | "QUESTION"
+  | "INFO_REQUEST"
+  | "INTEREST"
+  | "OBJECTION"
+  | "PURCHASE_INTENT"
+  | "HUMAN_REQUEST"
+  | "CANCELLATION"
+  | "COMPLAINT"
+  | "OTHER";
+
+/**
+ * Verified delivery information the agent is allowed to state. Only a
+ * "confirmed" status (set from real system data) permits claiming a date/period.
+ */
+export type DeliveryContext =
+  | { status: "confirmed"; date?: string; period?: string }
+  | { status: "unknown" };
 
 /** A single turn in the conversation history passed to the agent. */
 export interface ConversationTurn {
@@ -24,6 +43,15 @@ export interface ConversationTurn {
   type: MessageType;
   content: string;
 }
+
+/** Named actions the orchestration layer knows how to (eventually) execute. */
+export type AgentActionType =
+  | "SEND_TEXT"
+  | "REQUEST_CUSTOMER_DATA"
+  | "CHECK_DELIVERY"
+  | "SEND_CHECKOUT"
+  | "CREATE_ORDER"
+  | "HANDOFF_HUMAN";
 
 /**
  * Everything the agent is allowed to reason over. This is the ONLY knowledge
@@ -35,24 +63,27 @@ export interface AgentContext {
   stage: SalesStage;
   customer: Pick<
     Customer,
-    "id" | "name" | "phone" | "city" | "state" | "postalCode"
+    "id" | "name" | "phone" | "email" | "city" | "state" | "postalCode"
   >;
   product: Product | null;
   knowledge: ProductKnowledge[];
   settings: AgentSettings | null;
   history: ConversationTurn[];
+  /** Optional rolling summary for long conversations (memory strategy). */
+  summary?: string | null;
+  /**
+   * Verified delivery context. Since Logzz exposes no delivery-availability API,
+   * this is "unknown" during the conversation — the agent must never claim a
+   * date/period unless status is "confirmed" (which only real system data sets).
+   */
+  delivery?: DeliveryContext;
   /** The new inbound customer message to respond to. */
   incomingMessage: {
     type: MessageType;
     content: string;
   };
-  /**
-   * Verified data returned by integrations (e.g. Logzz delivery availability).
-   * When absent, the agent must not make claims that depend on it.
-   */
-  integrationFacts?: {
-    delivery?: unknown;
-  };
+  /** Actions the agent is allowed to suggest at this point. */
+  availableActions: AgentActionType[];
 }
 
 /** Discrete actions the agent may request the orchestration layer to perform. */
@@ -68,28 +99,43 @@ export type AgentAction =
 export interface AgentResponse {
   /** The primary reply text to send back to the customer. */
   reply: string;
+  /** Detected customer intent. */
+  intent: CustomerIntent;
   /** The stage the conversation should move to (validated by the state machine). */
   nextStage: SalesStage;
   /** Ordered actions the orchestration layer should execute. */
   actions: AgentAction[];
   /** True when the conversation must be handed to a human. */
   requiresHumanHandoff: boolean;
+  /** Human-readable reason for the handoff, when applicable. */
+  handoffReason?: string;
+  /** Customer data fields still needed to advance the sale. */
+  dataToCollect: string[];
+  /** Whether the customer has expressed intent to buy. */
+  purchaseIntent: boolean;
   /** IDs of knowledge items the answer was grounded on (auditability). */
   usedKnowledgeIds: string[];
   /** Model confidence 0..1, when the provider supplies it. */
   confidence?: number;
 }
 
+/** Raised when the AI provider is unavailable/unconfigured. Caught by the
+ *  orchestration layer to show a friendly message (never leaks internals). */
+export class AiUnavailableError extends Error {
+  constructor(message = "AI provider is not available") {
+    super(message);
+    this.name = "AiUnavailableError";
+  }
+}
+
 /**
  * Abstraction over the text-generation provider (OpenAI, Anthropic, etc.).
- * NOT implemented yet. A concrete implementation will build the prompt from
- * `AgentContext`, call the model, and parse a structured `AgentResponse`.
+ * Concrete implementations build the prompt from `AgentContext`, call the
+ * model, and parse a validated structured `AgentResponse`.
  */
 export interface AiProvider {
   readonly name: string;
   isConfigured(): boolean;
-  /** @throws {NotImplementedError} until a real provider is connected. */
+  /** @throws {AiUnavailableError} when the provider cannot fulfill the request. */
   generate(context: AgentContext): Promise<AgentResponse>;
 }
-
-export type { NotImplementedError };

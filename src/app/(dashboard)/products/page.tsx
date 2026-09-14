@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { formatPriceCents } from "@/lib/slug";
 import { listProducts } from "@/server/services/product.service";
@@ -11,7 +13,15 @@ export default async function ProductsPage() {
     <div>
       <PageHeader
         title="Produtos"
-        description="Catálogo de produtos que o agente de IA poderá vender. O formulário de cadastro completo será adicionado na próxima etapa."
+        description="Catálogo de produtos que o agente de IA poderá vender. O agente usa somente estas informações."
+        action={
+          <Link
+            href="/products/new"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+          >
+            Novo produto
+          </Link>
+        }
       />
 
       {products.length === 0 ? (

@@ -1,12 +1,12 @@
 import { AgentMode, MessageType, type Conversation } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
-import { logger } from "@/server/logger/logger";
 import { getGroundingKnowledge } from "@/server/services/knowledge.service";
 import { getAgentSettings } from "@/server/services/agent-settings.service";
 
+import { AI_CONFIG } from "./config";
+import { computeAvailableActions, postProcessResponse } from "./guardrails";
 import { getAiProvider } from "./provider";
-import { canTransition } from "./states";
 import type {
   AgentContext,
   AgentResponse,
@@ -17,16 +17,14 @@ import type {
 /**
  * AI Sales Agent orchestrator.
  *
- * Responsibilities that ARE implemented now (no external calls needed):
- *  - Enforce human-in-the-loop: never auto-respond when the conversation is
- *    paused or handed to a human.
+ * Responsibilities:
+ *  - Enforce human-in-the-loop: never auto-respond when a conversation is
+ *    paused or handed to a human (`shouldAutoRespond`).
  *  - Assemble the grounded `AgentContext` from the database (customer, product,
- *    curated knowledge, settings, recent history).
- *  - Validate stage transitions produced by the provider.
- *
- * Responsibility that is NOT implemented yet:
- *  - The actual text generation, which depends on an AI provider that is not
- *    connected. `generateResponse` will surface NotImplementedError until then.
+ *    curated knowledge, settings, recent history) — the ONLY facts the agent
+ *    may use.
+ *  - Delegate text generation to a swappable `AiProvider`.
+ *  - Apply guardrails (state machine + action gating) to the provider output.
  */
 export class SalesAgent {
   private readonly provider: AiProvider;
@@ -44,7 +42,7 @@ export class SalesAgent {
   async buildContext(
     conversationId: string,
     incoming: { type: MessageType; content: string },
-    historyLimit = 20,
+    historyLimit = AI_CONFIG.historyLimit,
   ): Promise<AgentContext> {
     const conversation = await prisma.conversation.findUniqueOrThrow({
       where: { id: conversationId },
@@ -70,42 +68,41 @@ export class SalesAgent {
       .reverse()
       .map((m) => ({ sender: m.sender, type: m.type, content: m.content }));
 
+    const product = conversation.product;
+
     return {
       conversationId,
       stage: conversation.stage,
+      summary: conversation.summary,
       customer: {
         id: conversation.customer.id,
         name: conversation.customer.name,
         phone: conversation.customer.phone,
+        email: conversation.customer.email,
         city: conversation.customer.city,
         state: conversation.customer.state,
         postalCode: conversation.customer.postalCode,
       },
-      product: conversation.product,
+      product,
       knowledge,
       settings,
       history,
       incomingMessage: incoming,
+      availableActions: computeAvailableActions({ product }),
+      // No Logzz delivery-availability API exists; delivery is confirmed only
+      // inside the checkout. So the agent's delivery context is always unknown
+      // here and it must not claim any date/period (see guardrails).
+      delivery: { status: "unknown" },
     };
   }
 
   /**
-   * Produce a structured response for the given context.
-   * @throws {NotImplementedError} until an AI provider is connected.
+   * Produce a guardrailed structured response for the given context.
+   * @throws {AiUnavailableError} when the provider cannot fulfill the request.
    */
   async generateResponse(context: AgentContext): Promise<AgentResponse> {
-    const response = await this.provider.generate(context);
-
-    // Guard the state machine even against a misbehaving provider.
-    if (!canTransition(context.stage, response.nextStage)) {
-      logger.warn("sales-agent", "Rejected invalid stage transition", {
-        from: context.stage,
-        to: response.nextStage,
-      });
-      response.nextStage = context.stage;
-    }
-
-    return response;
+    const raw = await this.provider.generate(context);
+    return postProcessResponse(raw, context);
   }
 }
 

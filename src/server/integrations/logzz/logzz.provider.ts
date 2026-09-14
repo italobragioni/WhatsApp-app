@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { IntegrationProviderType } from "@prisma/client";
 
 import {
@@ -7,65 +9,89 @@ import {
   type ExternalOrderInput,
   type FulfillmentProvider,
   type IntegrationResult,
-  NotImplementedError,
 } from "../types";
+import { getLogzzWebhookSecret, isLogzzWebhookConfigured } from "./config";
+import {
+  normalizeLogzzOrderEvent,
+  type NormalizedLogzzOrderEvent,
+} from "./webhook-schema";
 
 /**
- * Logzz provider.
+ * Logzz provider (real, minimal).
  *
- * ┌─────────────────────────────────────────────────────────────────────┐
- * │  NOT CONNECTED YET. Contract implementation only.                     │
- * │  The real Logzz endpoints and payloads are unknown at this stage and  │
- * │  MUST NOT be invented. Method names below express intended            │
- * │  capabilities and will be adjusted against the official Logzz API     │
- * │  documentation when we implement the connection.                      │
- * └─────────────────────────────────────────────────────────────────────┘
- *
- * Critical rule reminder: information returned here is the ONLY source of
- * truth the AI agent may use for delivery dates, availability, and order
- * status. The agent must never invent these values.
+ * Audit result (see ./config.ts): Logzz has NO public REST API to create
+ * orders, pull order status, or query delivery availability. Those methods are
+ * therefore reported as UNSUPPORTED — never faked. The confirmed, implemented
+ * capabilities are: inbound order webhooks and checkout links (stored on the
+ * product). Delivery availability/date/period are confirmed by the customer
+ * INSIDE the Logzz checkout, not via an API call.
  */
+const UNSUPPORTED = (method: string): IntegrationResult<never> => ({
+  ok: false,
+  code: "unsupported",
+  error: `Logzz has no public API for "${method}". Use the checkout link + order webhook instead.`,
+});
+
 export class LogzzProvider implements FulfillmentProvider {
   readonly type = IntegrationProviderType.LOGZZ;
   readonly name = "Logzz";
 
+  /** "Configured" means we can authenticate inbound webhooks. */
   isConfigured(): boolean {
-    // Real check will look for LOGZZ_API_BASE_URL / LOGZZ_API_KEY etc.
-    return false;
+    return isLogzzWebhookConfigured();
   }
 
   async getDeliveryAvailability(
     _input: DeliveryAddress,
   ): Promise<IntegrationResult<DeliveryAvailability>> {
-    throw new NotImplementedError(this.name, "getDeliveryAvailability");
+    return UNSUPPORTED("getDeliveryAvailability");
   }
 
   async createOrder(
     _input: ExternalOrderInput,
   ): Promise<IntegrationResult<ExternalOrder>> {
-    throw new NotImplementedError(this.name, "createOrder");
+    return UNSUPPORTED("createOrder");
   }
 
   async getOrder(
     _externalId: string,
   ): Promise<IntegrationResult<ExternalOrder>> {
-    throw new NotImplementedError(this.name, "getOrder");
+    return UNSUPPORTED("getOrder");
   }
 
   async getOrderStatus(
     _externalId: string,
   ): Promise<IntegrationResult<{ status: string }>> {
-    throw new NotImplementedError(this.name, "getOrderStatus");
+    return UNSUPPORTED("getOrderStatus");
   }
 
-  verifyWebhookSignature(_input: {
+  /**
+   * Authenticate an inbound webhook using our shared secret token (Logzz
+   * documents no signature mechanism, so the merchant embeds this token in the
+   * configured webhook URL / header and we compare it here). `signature`
+   * carries that token; `payload` is unused.
+   */
+  verifyWebhookSignature(input: {
     payload: string;
     signature: string | null;
   }): boolean {
-    throw new NotImplementedError(this.name, "verifyWebhookSignature");
+    const secret = getLogzzWebhookSecret();
+    if (!secret || !input.signature) return false;
+    const a = Buffer.from(secret);
+    const b = Buffer.from(input.signature);
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
   }
 
-  parseWebhook(_payload: unknown): { eventType: string; externalId?: string } {
-    throw new NotImplementedError(this.name, "parseWebhook");
+  /** Minimal interface impl: event type + external id. */
+  parseWebhook(payload: unknown): { eventType: string; externalId?: string } {
+    const event = normalizeLogzzOrderEvent(payload);
+    if (!event) return { eventType: "unknown" };
+    return { eventType: event.rawStatus, externalId: event.externalId };
+  }
+
+  /** Rich normalization used by the webhook service. */
+  normalizeOrderEvent(payload: unknown): NormalizedLogzzOrderEvent | null {
+    return normalizeLogzzOrderEvent(payload);
   }
 }

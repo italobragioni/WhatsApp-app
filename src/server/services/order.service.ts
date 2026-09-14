@@ -22,6 +22,17 @@ export async function getOrder(id: string): Promise<OrderWithRelations | null> {
   });
 }
 
+/** Orders for a customer (used to show order status inside a conversation). */
+export async function listOrdersByCustomer(
+  customerId: string,
+): Promise<OrderWithRelations[]> {
+  return prisma.order.findMany({
+    where: { customerId },
+    include: { customer: true, product: true },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
 export interface CreateDraftOrderInput {
   customerId: string;
   productId?: string;

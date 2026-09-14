@@ -23,6 +23,9 @@ export const productInputSchema = z.object({
   aiAllowedTopics: z.array(z.string().min(1)).default([]),
   aiForbiddenTopics: z.array(z.string().min(1)).default([]),
   checkoutUrl: z.string().url().optional().nullable(),
+  // Optional Logzz references (product/offer identifiers from the Logzz panel).
+  externalId: z.string().max(120).optional().nullable(),
+  offerId: z.string().max(120).optional().nullable(),
   active: z.boolean().default(true),
 });
 

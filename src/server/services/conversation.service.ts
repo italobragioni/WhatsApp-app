@@ -14,6 +14,14 @@ export type ConversationWithCustomer = Prisma.ConversationGetPayload<{
   include: { customer: true; product: true };
 }>;
 
+export type ConversationWithMessages = Prisma.ConversationGetPayload<{
+  include: {
+    customer: true;
+    product: true;
+    messages: true;
+  };
+}>;
+
 export async function listConversations(): Promise<ConversationWithCustomer[]> {
   return prisma.conversation.findMany({
     include: { customer: true, product: true },
@@ -27,6 +35,46 @@ export async function getConversation(
   return prisma.conversation.findUnique({
     where: { id },
     include: { customer: true, product: true },
+  });
+}
+
+export async function getConversationWithMessages(
+  id: string,
+): Promise<ConversationWithMessages | null> {
+  return prisma.conversation.findUnique({
+    where: { id },
+    include: {
+      customer: true,
+      product: true,
+      messages: { orderBy: { createdAt: "asc" } },
+    },
+  });
+}
+
+/**
+ * Create an internal TEST conversation (channel = MANUAL). Reuses/creates a
+ * customer by phone so the admin can simulate a client from the panel.
+ */
+export async function createTestConversation(input: {
+  productId?: string | null;
+  customerName?: string | null;
+  customerPhone: string;
+}): Promise<Conversation> {
+  const customer = await prisma.customer.upsert({
+    where: { phone: input.customerPhone },
+    create: {
+      phone: input.customerPhone,
+      name: input.customerName ?? null,
+    },
+    update: input.customerName ? { name: input.customerName } : {},
+  });
+
+  return prisma.conversation.create({
+    data: {
+      customerId: customer.id,
+      productId: input.productId ?? null,
+      channel: ConversationChannel.MANUAL,
+    },
   });
 }
 

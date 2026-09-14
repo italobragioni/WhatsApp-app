@@ -46,6 +46,8 @@ export interface NormalizedInboundMessage {
   externalId: string;
   /** Sender phone number in E.164 format. */
   from: string;
+  /** Display name from the provider's contact profile, when available. */
+  contactName?: string;
   type: MessageType;
   /** Text body or caption (empty for media without caption). */
   text?: string;
@@ -87,8 +89,14 @@ export interface MessagingProvider extends IntegrationProvider {
     message: OutboundMediaMessage,
   ): Promise<IntegrationResult<{ externalId: string }>>;
 
+  /**
+   * Download media bytes. `maxBytes`, when provided, rejects oversized media
+   * (checked against the provider-reported size and the actual payload) with
+   * code "too_large" instead of downloading it.
+   */
   downloadMedia(
     mediaId: string,
+    options?: { maxBytes?: number },
   ): Promise<IntegrationResult<DownloadedMedia>>;
 
   /** Verify the authenticity of an inbound webhook request. */

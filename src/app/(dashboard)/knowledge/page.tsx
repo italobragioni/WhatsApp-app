@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { listProducts } from "@/server/services/product.service";
 
@@ -21,12 +23,14 @@ export default async function KnowledgePage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {products.map((product) => (
-            <Card key={product.id}>
-              <h3 className="font-medium">{product.name}</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Gerenciamento de perguntas, objeções e argumentos em breve.
-              </p>
-            </Card>
+            <Link key={product.id} href={`/knowledge/${product.id}`}>
+              <Card className="transition hover:bg-slate-50">
+                <h3 className="font-medium">{product.name}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Gerenciar perguntas, objeções e argumentos →
+                </p>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
