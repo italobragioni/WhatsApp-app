@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/ui";
 
-import { ProductForm } from "./product-form";
+import { createProductAction } from "../actions";
+import { ProductForm } from "../product-form";
 
 export default function NewProductPage() {
   return (
@@ -19,7 +20,11 @@ export default function NewProductPage() {
         title="Novo produto"
         description="Cadastre um produto real. O agente usará somente estas informações — nunca inventará dados."
       />
-      <ProductForm />
+      <ProductForm
+        action={createProductAction}
+        submitLabel="Salvar produto"
+        cancelHref="/products"
+      />
     </div>
   );
 }

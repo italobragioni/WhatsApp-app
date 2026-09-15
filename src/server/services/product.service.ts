@@ -1,25 +1,30 @@
 import type { Product } from "@prisma/client";
 import { z } from "zod";
 
+import { LONG_TEXT_MAX } from "@/lib/limits";
 import { slugify } from "@/lib/slug";
 import { prisma } from "@/server/db/prisma";
 
 /**
  * Product business logic. Pure DB operations with validated input — no external
  * integrations involved.
+ *
+ * Long free-text fields the AI reads (description, warranty, delivery/payment
+ * info) allow up to LONG_TEXT_MAX characters. Short/technical fields (name,
+ * ids, urls) keep tight limits and must NOT be widened.
  */
 
 export const productInputSchema = z.object({
   name: z.string().min(2).max(160),
-  description: z.string().max(5000).optional().nullable(),
+  description: z.string().max(LONG_TEXT_MAX).optional().nullable(),
   priceCents: z.number().int().min(0).default(0),
   currency: z.string().length(3).default("BRL"),
   benefits: z.array(z.string().min(1)).default([]),
   features: z.array(z.string().min(1)).default([]),
   salesArguments: z.array(z.string().min(1)).default([]),
-  warranty: z.string().max(2000).optional().nullable(),
-  deliveryInfo: z.string().max(2000).optional().nullable(),
-  paymentInfo: z.string().max(2000).optional().nullable(),
+  warranty: z.string().max(LONG_TEXT_MAX).optional().nullable(),
+  deliveryInfo: z.string().max(LONG_TEXT_MAX).optional().nullable(),
+  paymentInfo: z.string().max(LONG_TEXT_MAX).optional().nullable(),
   aiAllowedTopics: z.array(z.string().min(1)).default([]),
   aiForbiddenTopics: z.array(z.string().min(1)).default([]),
   checkoutUrl: z.string().url().optional().nullable(),

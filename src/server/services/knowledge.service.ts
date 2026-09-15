@@ -1,6 +1,7 @@
 import { KnowledgeCategory, type ProductKnowledge } from "@prisma/client";
 import { z } from "zod";
 
+import { LONG_TEXT_MAX } from "@/lib/limits";
 import { prisma } from "@/server/db/prisma";
 
 /** Curated product knowledge — the grounding source for the AI agent. */
@@ -8,9 +9,10 @@ import { prisma } from "@/server/db/prisma";
 export const knowledgeInputSchema = z.object({
   productId: z.string().min(1),
   category: z.nativeEnum(KnowledgeCategory).default(KnowledgeCategory.GENERAL),
+  // `question` is a short label; `answer`/`content` are long AI-facing text.
   question: z.string().max(1000).optional().nullable(),
-  answer: z.string().max(5000).optional().nullable(),
-  content: z.string().min(1).max(8000),
+  answer: z.string().max(LONG_TEXT_MAX).optional().nullable(),
+  content: z.string().min(1).max(LONG_TEXT_MAX),
   priority: z.number().int().min(0).max(100).default(0),
   active: z.boolean().default(true),
 });

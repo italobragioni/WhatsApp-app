@@ -27,7 +27,7 @@ export default async function ProductsPage() {
       {products.length === 0 ? (
         <EmptyState
           title="Nenhum produto cadastrado"
-          description="A estrutura de dados e a camada de serviço já estão prontas. O cadastro pela interface entra na próxima etapa."
+          description="Clique em “Novo produto” para cadastrar o primeiro produto."
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -42,9 +42,17 @@ export default async function ProductsPage() {
               <p className="mt-1 text-sm text-slate-500 line-clamp-2">
                 {product.description ?? "Sem descrição"}
               </p>
-              <p className="mt-3 text-lg font-semibold">
-                {formatPriceCents(product.priceCents, product.currency)}
-              </p>
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-lg font-semibold">
+                  {formatPriceCents(product.priceCents, product.currency)}
+                </p>
+                <Link
+                  href={`/products/${product.id}/edit`}
+                  className="rounded-lg border px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50"
+                >
+                  Editar
+                </Link>
+              </div>
             </Card>
           ))}
         </div>

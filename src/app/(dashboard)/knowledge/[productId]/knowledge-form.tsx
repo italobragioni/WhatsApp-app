@@ -1,8 +1,10 @@
 "use client";
 
 import { KnowledgeCategory } from "@prisma/client";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useActionState } from "react";
+
+import { CharCountTextArea } from "@/components/char-count-textarea";
 
 import {
   createKnowledgeAction,
@@ -17,6 +19,10 @@ export function KnowledgeForm({ productId }: { productId: string }) {
     FormData
   >(createKnowledgeAction, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  const [overFields, setOverFields] = useState<Record<string, boolean>>({});
+  const anyOver = Object.values(overFields).some(Boolean);
+  const onOverChange = (name: string, isOver: boolean) =>
+    setOverFields((prev) => ({ ...prev, [name]: isOver }));
 
   return (
     <form
@@ -76,30 +82,27 @@ export function KnowledgeForm({ productId }: { productId: string }) {
         />
       </div>
 
-      <div className="space-y-1">
-        <label className="block text-sm font-medium" htmlFor="answer">
-          Resposta
-        </label>
-        <textarea
-          id="answer"
-          name="answer"
-          rows={2}
-          placeholder="Ex.: O pagamento é realizado somente no recebimento."
-          className="w-full rounded-lg border px-3 py-2 text-sm"
-        />
-      </div>
+      <CharCountTextArea
+        label="Resposta"
+        name="answer"
+        rows={3}
+        placeholder="Ex.: O pagamento é realizado somente no recebimento."
+        onOverChange={onOverChange}
+      />
 
-      <div className="space-y-1">
-        <label className="block text-sm font-medium" htmlFor="content">
-          Conteúdo adicional (opcional)
-        </label>
-        <textarea
-          id="content"
-          name="content"
-          rows={2}
-          className="w-full rounded-lg border px-3 py-2 text-sm"
-        />
-      </div>
+      <CharCountTextArea
+        label="Conteúdo adicional (opcional)"
+        name="content"
+        rows={3}
+        onOverChange={onOverChange}
+      />
+
+      {anyOver ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Um ou mais campos excedem 50.000 caracteres. Reduza o conteúdo para
+          salvar.
+        </p>
+      ) : null}
 
       {state?.error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -109,7 +112,7 @@ export function KnowledgeForm({ productId }: { productId: string }) {
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || anyOver}
         className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
       >
         {pending ? "Salvando..." : "Adicionar"}
