@@ -200,4 +200,35 @@ describe("checkout link injection (postProcessResponse)", () => {
     expect(res.reply).not.toContain("site-falso.com");
     expect(res.reply).toContain(REAL_URL);
   });
+
+  it("injects the link on PURCHASE_INTENT even if wants_checkout/action are absent", () => {
+    const res = postProcessResponse(
+      checkoutResponse({
+        reply: "Que ótimo, vamos fechar!",
+        actions: [{ type: "SEND_TEXT", text: "Que ótimo, vamos fechar!" }],
+        wantsCheckout: false,
+        intent: "PURCHASE_INTENT",
+      }),
+      makeContext({ product: makeProduct({ checkoutUrl: REAL_URL }) }),
+    );
+    expect(res.reply).toContain(REAL_URL);
+    expect(res.actions.some((a) => a.type === "SEND_CHECKOUT")).toBe(true);
+  });
+
+  it("injects the link when the stage is SENDING_CHECKOUT", () => {
+    const res = postProcessResponse(
+      checkoutResponse({
+        reply: "Perfeito!",
+        actions: [{ type: "SEND_TEXT", text: "Perfeito!" }],
+        wantsCheckout: false,
+        intent: "OTHER",
+        nextStage: SalesStage.SENDING_CHECKOUT,
+      }),
+      makeContext({
+        product: makeProduct({ checkoutUrl: REAL_URL }),
+        stage: SalesStage.SENDING_CHECKOUT,
+      }),
+    );
+    expect(res.reply).toContain(REAL_URL);
+  });
 });

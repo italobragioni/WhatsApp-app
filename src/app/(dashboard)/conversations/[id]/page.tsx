@@ -200,6 +200,13 @@ export default async function ConversationDetailPage({
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{stage}</Badge>
             <Badge tone={AGENT_MODE_TONE[agentMode]}>Modo: {agentMode}</Badge>
+            {product ? (
+              <Badge tone={product.checkoutUrl ? "success" : "warning"}>
+                {product.checkoutUrl ? "Checkout ✓" : "Sem checkout"}
+              </Badge>
+            ) : (
+              <Badge tone="warning">Sem produto</Badge>
+            )}
           </div>
         </div>
 
