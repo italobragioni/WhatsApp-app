@@ -19,6 +19,30 @@ const AGENT_MODE_TONE = {
   HUMAN: "danger",
 } as const;
 
+/** Render text with clickable http(s) links (used for checkout links, etc.). */
+function LinkifiedText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return (
+    <p className="whitespace-pre-wrap text-sm">
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-700 underline break-all"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
 const SENDER_LABEL: Record<string, string> = {
   CUSTOMER: "Cliente",
   AGENT: "IA",
@@ -260,7 +284,7 @@ export default async function ConversationDetailPage({
                   {msg.type === "AUDIO" ? (
                     <AudioMessage metadata={msg.metadata} content={msg.content} />
                   ) : (
-                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                    <LinkifiedText text={msg.content} />
                   )}
                   {msg.sender === "AGENT" ? (
                     <AgentMeta metadata={msg.metadata} />

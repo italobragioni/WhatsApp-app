@@ -50,7 +50,11 @@ describe("model output mapping", () => {
       raw({ wants_checkout: true, purchase_intent: true }),
       withUrl,
     );
-    expect(res.actions.some((a) => a.type === "SEND_CHECKOUT")).toBe(true);
+    const action = res.actions.find((a) => a.type === "SEND_CHECKOUT");
+    expect(action).toEqual({
+      type: "SEND_CHECKOUT",
+      url: "https://checkout.example/x",
+    });
   });
 
   it("does NOT emit SEND_CHECKOUT without a checkout URL", () => {

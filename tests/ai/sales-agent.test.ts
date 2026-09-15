@@ -72,4 +72,25 @@ describe("SalesAgent.generateResponse (guardrailed)", () => {
     );
     expect(res.actions.some((a) => a.type === "SEND_CHECKOUT")).toBe(false);
   });
+
+  it("injects the real product checkout URL into the reply that gets sent", async () => {
+    const url = "https://entrega.logzz.com.br/oferta-x";
+    const agent = new SalesAgent(
+      providerReturning(
+        response({
+          reply: "Perfeito! [Checkout](#)",
+          actions: [
+            { type: "SEND_TEXT", text: "Perfeito!" },
+            { type: "SEND_CHECKOUT" },
+          ],
+          wantsCheckout: true,
+        }),
+      ),
+    );
+    const res = await agent.generateResponse(
+      makeContext({ product: makeProduct({ checkoutUrl: url }) }),
+    );
+    expect(res.reply).toContain(url);
+    expect(res.reply).not.toContain("(#)");
+  });
 });

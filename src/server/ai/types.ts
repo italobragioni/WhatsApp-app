@@ -91,7 +91,8 @@ export type AgentAction =
   | { type: "SEND_TEXT"; text: string }
   | { type: "REQUEST_CUSTOMER_DATA"; fields: string[] }
   | { type: "CHECK_DELIVERY" }
-  | { type: "SEND_CHECKOUT" }
+  // The real, cadastrado checkout URL from the product (never model-generated).
+  | { type: "SEND_CHECKOUT"; url?: string }
   | { type: "CREATE_ORDER" }
   | { type: "HANDOFF_HUMAN"; reason: string };
 
@@ -113,6 +114,9 @@ export interface AgentResponse {
   dataToCollect: string[];
   /** Whether the customer has expressed intent to buy. */
   purchaseIntent: boolean;
+  /** Whether the model signaled the customer wants to finalize/checkout now.
+   *  The app — not the model — attaches the real checkout link deterministically. */
+  wantsCheckout?: boolean;
   /** IDs of knowledge items the answer was grounded on (auditability). */
   usedKnowledgeIds: string[];
   /** Model confidence 0..1, when the provider supplies it. */

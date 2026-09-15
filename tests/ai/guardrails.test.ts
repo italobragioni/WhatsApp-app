@@ -7,6 +7,7 @@ import {
   computeAvailableActions,
   postProcessResponse,
   sanitizeCustomerText,
+  stripModelLinks,
 } from "@/server/ai/guardrails";
 import type { AgentResponse } from "@/server/ai/types";
 
@@ -132,5 +133,71 @@ describe("postProcessResponse", () => {
       makeContext(),
     );
     expect(res.reply.length).toBeGreaterThan(0);
+  });
+});
+
+describe("stripModelLinks", () => {
+  it("turns a markdown link into plain text and drops bare URLs", () => {
+    expect(stripModelLinks("[Checkout Óculos 2V PRO](#)")).toBe(
+      "Checkout Óculos 2V PRO",
+    );
+    expect(stripModelLinks("compre em https://site-falso.com/x já")).not.toMatch(
+      /https?:\/\//,
+    );
+  });
+});
+
+describe("checkout link injection (postProcessResponse)", () => {
+  const REAL_URL = "https://entrega.logzz.com.br/oferta-2vpro";
+
+  function checkoutResponse(overrides: Partial<AgentResponse> = {}): AgentResponse {
+    return {
+      reply: "Você pode finalizar por aqui: [Checkout Óculos 2V PRO](#).",
+      intent: "PURCHASE_INTENT",
+      nextStage: SalesStage.NEW_CONTACT,
+      actions: [
+        { type: "SEND_TEXT", text: "..." },
+        { type: "SEND_CHECKOUT" },
+      ],
+      requiresHumanHandoff: false,
+      dataToCollect: [],
+      purchaseIntent: true,
+      wantsCheckout: true,
+      usedKnowledgeIds: [],
+      ...overrides,
+    };
+  }
+
+  it("A) injects the REAL product checkout URL and removes the '#' placeholder", () => {
+    const res = postProcessResponse(
+      checkoutResponse(),
+      makeContext({ product: makeProduct({ checkoutUrl: REAL_URL }) }),
+    );
+    expect(res.reply).toContain(REAL_URL);
+    expect(res.reply).not.toContain("](#)");
+    expect(res.reply).not.toContain("(#)");
+    // The SEND_CHECKOUT action carries the exact cadastrado URL.
+    const action = res.actions.find((a) => a.type === "SEND_CHECKOUT");
+    expect(action).toEqual({ type: "SEND_CHECKOUT", url: REAL_URL });
+  });
+
+  it("B) never fabricates a URL when the product has no checkoutUrl", () => {
+    const res = postProcessResponse(
+      checkoutResponse({ reply: "Segue o link: [Comprar](#)" }),
+      makeContext({ product: makeProduct({ checkoutUrl: null }) }),
+    );
+    expect(res.actions.some((a) => a.type === "SEND_CHECKOUT")).toBe(false);
+    expect(res.reply).not.toMatch(/https?:\/\//);
+    expect(res.reply).not.toContain("(#)");
+    expect(res.reply.toLowerCase()).toContain("não está disponível");
+  });
+
+  it("C) a model-fabricated URL is discarded and replaced by the real one", () => {
+    const res = postProcessResponse(
+      checkoutResponse({ reply: "Compre em https://site-falso.com/pagar!" }),
+      makeContext({ product: makeProduct({ checkoutUrl: REAL_URL }) }),
+    );
+    expect(res.reply).not.toContain("site-falso.com");
+    expect(res.reply).toContain(REAL_URL);
   });
 });

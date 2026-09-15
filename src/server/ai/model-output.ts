@@ -50,7 +50,8 @@ export const MODEL_OUTPUT_INSTRUCTIONS = `Responda SEMPRE com um único objeto J
   "wants_checkout": boolean,             // true apenas se o cliente quer comprar agora
   "used_knowledge_ids": string[],        // ids dos itens de conhecimento usados
   "confidence": number                   // 0..1 (opcional)
-}`;
+}
+NUNCA escreva URLs, links ou markdown de link (como [texto](#)) no campo "reply". Você NÃO conhece o link de checkout. Quando o cliente quiser finalizar a compra, apenas defina "wants_checkout": true e diga algo como "vou te enviar o link para finalizar" — o SISTEMA anexa automaticamente o link oficial do produto.`;
 
 /**
  * Map a validated model output + context into the structured AgentResponse,
@@ -74,7 +75,8 @@ export function mapModelOutput(
     context.availableActions.includes("SEND_CHECKOUT") &&
     Boolean(context.product?.checkoutUrl);
   if (!handoff && raw.wants_checkout && checkoutAllowed) {
-    actions.push({ type: "SEND_CHECKOUT" });
+    // Carry the REAL cadastrado URL — never a model-generated one.
+    actions.push({ type: "SEND_CHECKOUT", url: context.product!.checkoutUrl! });
   }
 
   if (handoff) {
@@ -93,6 +95,7 @@ export function mapModelOutput(
     handoffReason: raw.handoff_reason ?? undefined,
     dataToCollect: raw.data_to_collect,
     purchaseIntent: raw.purchase_intent,
+    wantsCheckout: raw.wants_checkout,
     usedKnowledgeIds: raw.used_knowledge_ids,
     confidence: raw.confidence,
   };
