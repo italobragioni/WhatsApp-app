@@ -29,6 +29,35 @@ function linesToArray(raw: FormDataEntryValue | null): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Parse the checkout options the form serializes as JSON
+ * (`[{ label, price, url }]`, price as a BRL string). Incomplete rows (missing
+ * label or url) are dropped; prices are converted to integer cents. Returns null
+ * when there are no valid options, so a single `checkoutUrl` can be used.
+ */
+function parseCheckoutOptions(
+  raw: FormDataEntryValue | null,
+): { label: string; priceCents: number; url: string }[] | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  let arr: unknown;
+  try {
+    arr = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(arr)) return null;
+  const options = arr
+    .map((row) => {
+      const r = (row ?? {}) as Record<string, unknown>;
+      const label = typeof r.label === "string" ? r.label.trim() : "";
+      const url = typeof r.url === "string" ? r.url.trim() : "";
+      const price = typeof r.price === "string" ? r.price : "";
+      return { label, url, priceCents: parsePriceToCents(price) };
+    })
+    .filter((o) => o.label && o.url);
+  return options.length > 0 ? options : null;
+}
+
 // Long AI-facing fields allow up to LONG_TEXT_MAX; short/technical stay tight.
 const formSchema = z.object({
   name: z.string().min(2, "Nome muito curto").max(160),
@@ -67,6 +96,22 @@ function parseForm(formData: FormData) {
     return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
   const d = parsed.data;
+
+  const checkoutOptions = parseCheckoutOptions(formData.get("checkoutOptions"));
+  // Validate each option URL up front for a clear error (the service validates too).
+  if (checkoutOptions) {
+    for (const opt of checkoutOptions) {
+      try {
+        new URL(opt.url);
+      } catch {
+        return {
+          ok: false as const,
+          error: `URL inválida na opção "${opt.label}".`,
+        };
+      }
+    }
+  }
+
   return {
     ok: true as const,
     value: {
@@ -77,6 +122,7 @@ function parseForm(formData: FormData) {
       paymentInfo: d.paymentInfo ?? null,
       deliveryInfo: d.deliveryInfo ?? null,
       checkoutUrl: d.checkoutUrl ? d.checkoutUrl : null,
+      checkoutOptions,
       externalId: d.externalId ?? null,
       offerId: d.offerId ?? null,
       benefits: linesToArray(formData.get("benefits")),

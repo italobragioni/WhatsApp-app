@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { CharCountTextArea } from "@/components/char-count-textarea";
+import { parseCheckoutOptions } from "@/lib/checkout";
 
 import type { ProductFormState } from "./actions";
 
@@ -70,6 +71,131 @@ function Area({
 function priceToInput(cents: number | undefined): string {
   if (cents == null) return "";
   return (cents / 100).toFixed(2).replace(".", ",");
+}
+
+interface OptionRow {
+  key: string;
+  label: string;
+  price: string;
+  url: string;
+}
+
+let optionKeySeq = 0;
+const newOptionKey = () => `opt_${optionKeySeq++}`;
+
+/**
+ * Editor for MULTIPLE checkout offers (e.g. "1 unidade" R$129,90 and
+ * "2 unidades" R$189,90), each with its own Logzz link. The bot detects which
+ * option the customer wants and sends the matching link. Serialized as JSON into
+ * a hidden `checkoutOptions` input; when empty, the single "Link único" is used.
+ */
+function CheckoutOptionsEditor({ initial }: { initial: OptionRow[] }) {
+  const [rows, setRows] = useState<OptionRow[]>(initial);
+
+  const update = (key: string, patch: Partial<OptionRow>) =>
+    setRows((prev) =>
+      prev.map((r) => (r.key === key ? { ...r, ...patch } : r)),
+    );
+  const remove = (key: string) =>
+    setRows((prev) => prev.filter((r) => r.key !== key));
+  const add = () =>
+    setRows((prev) => [
+      ...prev,
+      { key: newOptionKey(), label: "", price: "", url: "" },
+    ]);
+
+  const serialized = JSON.stringify(
+    rows
+      .filter((r) => r.label.trim() && r.url.trim())
+      .map((r) => ({ label: r.label.trim(), price: r.price, url: r.url.trim() })),
+  );
+
+  return (
+    <div className="space-y-3 rounded-lg border border-dashed bg-slate-50/60 p-4">
+      <div>
+        <p className="text-sm font-medium">Opções de checkout (vários links)</p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Cadastre uma opção por combo (ex.: “1 unidade” R$129,90 e “2 unidades”
+          R$189,90), cada uma com seu link da Logzz. O agente identifica qual o
+          cliente quer e envia o link certo. Se preenchidas, têm prioridade sobre
+          o “Link único” acima.
+        </p>
+      </div>
+
+      {/* Hidden field the server action reads. */}
+      <input type="hidden" name="checkoutOptions" value={serialized} />
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-slate-400">
+          Nenhuma opção adicionada. Use o “Link único” acima, ou adicione opções
+          abaixo.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((row, i) => (
+            <div
+              key={row.key}
+              className="space-y-2 rounded-lg border bg-white p-3"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">
+                  Opção {i + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(row.key)}
+                  className="text-xs text-red-600 hover:underline"
+                >
+                  Remover
+                </button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  aria-label="Rótulo da opção"
+                  placeholder="Rótulo (ex.: 2 unidades)"
+                  value={row.label}
+                  onChange={(e) => update(row.key, { label: e.target.value })}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+                <input
+                  aria-label="Preço da opção"
+                  placeholder="Preço (ex.: 189,90)"
+                  value={row.price}
+                  onChange={(e) => update(row.key, { price: e.target.value })}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
+              <input
+                aria-label="URL da opção"
+                placeholder="https://entrega.logzz.com.br/..."
+                value={row.url}
+                onChange={(e) => update(row.key, { url: e.target.value })}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={add}
+        className="rounded-lg border bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50"
+      >
+        + Adicionar opção
+      </button>
+    </div>
+  );
+}
+
+/** Build the initial editor rows from a product's stored checkout options. */
+function initialOptionRows(product?: Product | null): OptionRow[] {
+  return parseCheckoutOptions(product?.checkoutOptions).map((o) => ({
+    key: newOptionKey(),
+    label: o.label,
+    price: priceToInput(o.priceCents),
+    url: o.url,
+  }));
 }
 
 /**
@@ -169,11 +295,12 @@ export function ProductForm({
         onOverChange={onOverChange}
       />
       <Text
-        label="Checkout Logzz (URL da oferta, opcional)"
+        label="Link único de checkout (opcional)"
         name="checkoutUrl"
         placeholder="https://entrega.logzz.com.br/..."
         defaultValue={p?.checkoutUrl}
       />
+      <CheckoutOptionsEditor initial={initialOptionRows(p)} />
       <Text
         label="ID externo Logzz (opcional)"
         name="externalId"

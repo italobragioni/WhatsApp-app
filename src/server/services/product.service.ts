@@ -1,6 +1,7 @@
-import type { Product } from "@prisma/client";
+import { Prisma, type Product } from "@prisma/client";
 import { z } from "zod";
 
+import { checkoutOfferSchema } from "@/lib/checkout";
 import { LONG_TEXT_MAX } from "@/lib/limits";
 import { slugify } from "@/lib/slug";
 import { prisma } from "@/server/db/prisma";
@@ -28,6 +29,8 @@ export const productInputSchema = z.object({
   aiAllowedTopics: z.array(z.string().min(1)).default([]),
   aiForbiddenTopics: z.array(z.string().min(1)).default([]),
   checkoutUrl: z.string().url().optional().nullable(),
+  // Multiple checkout offers (e.g. 1un / 2un), each with its own Logzz link.
+  checkoutOptions: z.array(checkoutOfferSchema).optional().nullable(),
   // Optional Logzz references (product/offer identifiers from the Logzz panel).
   externalId: z.string().max(120).optional().nullable(),
   offerId: z.string().max(120).optional().nullable(),
@@ -58,19 +61,33 @@ async function uniqueSlug(name: string, ignoreId?: string): Promise<string> {
   }
 }
 
+/** Convert the parsed offers to a Prisma JSON value (DB NULL when empty). */
+function toCheckoutOptionsJson(
+  options: ProductInput["checkoutOptions"],
+): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  return options && options.length > 0
+    ? (options as Prisma.InputJsonValue)
+    : Prisma.DbNull;
+}
+
 export async function createProduct(input: ProductInput): Promise<Product> {
-  const data = productInputSchema.parse(input);
-  const slug = await uniqueSlug(data.name);
-  return prisma.product.create({ data: { ...data, slug } });
+  const { checkoutOptions, ...rest } = productInputSchema.parse(input);
+  const slug = await uniqueSlug(rest.name);
+  return prisma.product.create({
+    data: { ...rest, slug, checkoutOptions: toCheckoutOptionsJson(checkoutOptions) },
+  });
 }
 
 export async function updateProduct(
   id: string,
   input: ProductInput,
 ): Promise<Product> {
-  const data = productInputSchema.parse(input);
-  const slug = await uniqueSlug(data.name, id);
-  return prisma.product.update({ where: { id }, data: { ...data, slug } });
+  const { checkoutOptions, ...rest } = productInputSchema.parse(input);
+  const slug = await uniqueSlug(rest.name, id);
+  return prisma.product.update({
+    where: { id },
+    data: { ...rest, slug, checkoutOptions: toCheckoutOptionsJson(checkoutOptions) },
+  });
 }
 
 export async function setProductActive(

@@ -1,5 +1,6 @@
 import { SalesStage, type Product } from "@prisma/client";
 
+import { getProductOffers } from "@/lib/checkout";
 import type { AgentContext } from "@/server/ai/types";
 
 export function makeProduct(overrides: Partial<Product> = {}): Product {
@@ -21,6 +22,7 @@ export function makeProduct(overrides: Partial<Product> = {}): Product {
     aiAllowedTopics: [],
     aiForbiddenTopics: [],
     checkoutUrl: null,
+    checkoutOptions: null,
     externalId: null,
     offerId: null,
     active: true,
@@ -50,7 +52,7 @@ export function makeContext(overrides: Partial<AgentContext> = {}): AgentContext
     settings: null,
     history: [],
     incomingMessage: { type: "TEXT", content: "Oi" },
-    availableActions: product?.checkoutUrl
+    availableActions: getProductOffers(product).length
       ? ["SEND_TEXT", "REQUEST_CUSTOMER_DATA", "CHECK_DELIVERY", "HANDOFF_HUMAN", "SEND_CHECKOUT"]
       : ["SEND_TEXT", "REQUEST_CUSTOMER_DATA", "CHECK_DELIVERY", "HANDOFF_HUMAN"],
     ...overrides,

@@ -117,6 +117,10 @@ export interface AgentResponse {
   /** Whether the model signaled the customer wants to finalize/checkout now.
    *  The app — not the model — attaches the real checkout link deterministically. */
   wantsCheckout?: boolean;
+  /** Which checkout offer the model selected (0-based index), when the product
+   *  has multiple options. The app maps this to the real URL; -1/undefined means
+   *  "not chosen" and the app asks the customer which option they want. */
+  checkoutOptionIndex?: number | null;
   /** IDs of knowledge items the answer was grounded on (auditability). */
   usedKnowledgeIds: string[];
   /** Model confidence 0..1, when the provider supplies it. */

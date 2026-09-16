@@ -162,7 +162,12 @@ model Product {
   aiAllowedTopics    String[] @default([])
   aiForbiddenTopics  String[] @default([])
   /// Logzz checkout/offer link, created in the Logzz panel. Never invented.
+  /// Used as the single/default offer when `checkoutOptions` is empty.
   checkoutUrl String?
+  /// Optional multiple checkout offers (e.g. "1 unidade" / "2 unidades"), each
+  /// with its own Logzz link and price. When present, these take precedence
+  /// over `checkoutUrl`. Shape: Array<{ label: string; priceCents: number; url: string }>.
+  checkoutOptions Json?
   /// Optional external identifier of the product in Logzz (reference only).
   externalId  String?
   /// Optional Logzz offer identifier associated with the checkout (reference).

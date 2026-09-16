@@ -280,6 +280,67 @@ describe("checkout link injection (postProcessResponse)", () => {
   });
 });
 
+describe("multiple checkout options", () => {
+  const OPTIONS = [
+    { label: "1 unidade", priceCents: 12990, url: "https://logzz.com.br/1un" },
+    { label: "2 unidades", priceCents: 18990, url: "https://logzz.com.br/2un" },
+  ];
+
+  function buyResponse(overrides: Partial<AgentResponse> = {}): AgentResponse {
+    return {
+      reply: "Perfeito!",
+      intent: "PURCHASE_INTENT",
+      nextStage: SalesStage.NEW_CONTACT,
+      actions: [{ type: "SEND_TEXT", text: "Perfeito!" }],
+      requiresHumanHandoff: false,
+      dataToCollect: [],
+      purchaseIntent: true,
+      wantsCheckout: true,
+      usedKnowledgeIds: [],
+      ...overrides,
+    };
+  }
+
+  it("sends the link of the option the model selected", () => {
+    const res = postProcessResponse(
+      buyResponse({ checkoutOptionIndex: 1 }),
+      makeContext({ product: makeProduct({ checkoutOptions: OPTIONS }) }),
+    );
+    expect(res.reply).toContain("https://logzz.com.br/2un");
+    expect(res.reply).not.toContain("https://logzz.com.br/1un");
+    expect(res.actions).toContainEqual({
+      type: "SEND_CHECKOUT",
+      url: "https://logzz.com.br/2un",
+    });
+  });
+
+  it("picks the option from the customer's own message", () => {
+    const res = postProcessResponse(
+      buyResponse({ checkoutOptionIndex: null }),
+      makeContext({
+        product: makeProduct({ checkoutOptions: OPTIONS }),
+        incomingMessage: { type: "TEXT", content: "quero 2 unidades" },
+      }),
+    );
+    expect(res.reply).toContain("https://logzz.com.br/2un");
+  });
+
+  it("asks which option when it's ambiguous, without sending a link", () => {
+    const res = postProcessResponse(
+      buyResponse({ checkoutOptionIndex: null, reply: "Legal!" }),
+      makeContext({
+        product: makeProduct({ checkoutOptions: OPTIONS }),
+        incomingMessage: { type: "TEXT", content: "me manda o link" },
+      }),
+    );
+    expect(res.reply).not.toContain("https://logzz.com.br/");
+    expect(res.reply.toLowerCase()).toContain("qual");
+    expect(res.reply).toContain("1 unidade");
+    expect(res.reply).toContain("2 unidades");
+    expect(res.actions.some((a) => a.type === "SEND_CHECKOUT")).toBe(false);
+  });
+});
+
 describe("customerWantsCheckout", () => {
   it("detects explicit link/buy requests (screenshot cases)", () => {
     expect(customerWantsCheckout("Me mande o link")).toBe(true);

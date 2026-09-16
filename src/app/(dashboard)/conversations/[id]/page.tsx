@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui";
+import { getProductOffers } from "@/lib/checkout";
 import { formatPriceCents } from "@/lib/slug";
 import { isAiConfigured } from "@/server/ai/config";
 import { getConversationWithMessages } from "@/server/services/conversation.service";
@@ -201,9 +202,18 @@ export default async function ConversationDetailPage({
             <Badge>{stage}</Badge>
             <Badge tone={AGENT_MODE_TONE[agentMode]}>Modo: {agentMode}</Badge>
             {product ? (
-              <Badge tone={product.checkoutUrl ? "success" : "warning"}>
-                {product.checkoutUrl ? "Checkout ✓" : "Sem checkout"}
-              </Badge>
+              (() => {
+                const offers = getProductOffers(product);
+                if (offers.length === 0)
+                  return <Badge tone="warning">Sem checkout</Badge>;
+                return (
+                  <Badge tone="success">
+                    {offers.length > 1
+                      ? `Checkout ✓ (${offers.length} opções)`
+                      : "Checkout ✓"}
+                  </Badge>
+                );
+              })()
             ) : (
               <Badge tone="warning">Sem produto</Badge>
             )}
