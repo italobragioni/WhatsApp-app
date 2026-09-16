@@ -51,7 +51,8 @@ export const MODEL_OUTPUT_INSTRUCTIONS = `Responda SEMPRE com um único objeto J
   "used_knowledge_ids": string[],        // ids dos itens de conhecimento usados
   "confidence": number                   // 0..1 (opcional)
 }
-NUNCA escreva URLs, links ou markdown de link (como [texto](#)) no campo "reply". Você NÃO conhece o link de checkout. Quando o cliente quiser finalizar a compra, apenas defina "wants_checkout": true e diga algo como "vou te enviar o link para finalizar" — o SISTEMA anexa automaticamente o link oficial do produto.`;
+NUNCA escreva URLs, links ou markdown de link (como [texto](#)) no campo "reply", e NUNCA diga que "não consegue enviar o link", que o cliente deve "procurar/buscar o produto no site" ou "acessar o site" — isso está ERRADO e não existe. Você não escreve o link, mas o SISTEMA anexa automaticamente o link OFICIAL de checkout do produto ao final da sua resposta.
+Quando o cliente demonstrar intenção de compra OU pedir o link, perguntar onde/como comprar ou como pagar: defina "wants_checkout": true e "intent": "PURCHASE_INTENT", e escreva uma confirmação curta e calorosa como "Perfeito! Aqui está o link para você finalizar sua compra:" (sem escrever o link — o sistema o adiciona).`;
 
 /**
  * Map a validated model output + context into the structured AgentResponse,

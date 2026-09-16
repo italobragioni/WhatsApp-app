@@ -5,6 +5,8 @@ import {
   buildDeliveryContext,
   buildSystemPrompt,
   computeAvailableActions,
+  customerWantsCheckout,
+  isCheckoutDeflection,
   postProcessResponse,
   sanitizeCustomerText,
   stripModelLinks,
@@ -230,5 +232,87 @@ describe("checkout link injection (postProcessResponse)", () => {
       }),
     );
     expect(res.reply).toContain(REAL_URL);
+  });
+
+  // Reproduces the production screenshot: the customer explicitly asks for the
+  // link, but the model misclassifies it (QUESTION/OTHER, no wants_checkout) and
+  // even refuses. The link must still be sent, and the refusal removed.
+  it("injects the link from the customer's message even if the model misclassifies", () => {
+    const res = postProcessResponse(
+      checkoutResponse({
+        reply:
+          "Desculpe, mas não consigo enviar links diretamente. Procure pelo Óculos 2V PRO no nosso site.",
+        intent: "OTHER",
+        nextStage: SalesStage.ANSWERING_QUESTION,
+        wantsCheckout: false,
+        actions: [{ type: "SEND_TEXT", text: "..." }],
+      }),
+      makeContext({
+        product: makeProduct({ checkoutUrl: REAL_URL }),
+        incomingMessage: { type: "TEXT", content: "Me mande o link" },
+      }),
+    );
+    expect(res.reply).toContain(REAL_URL);
+    // The refusal / "go to the site" deflection must be gone.
+    expect(res.reply.toLowerCase()).not.toContain("não consigo");
+    expect(res.reply.toLowerCase()).not.toContain("site");
+    expect(res.actions.some((a) => a.type === "SEND_CHECKOUT")).toBe(true);
+  });
+
+  it("does NOT force checkout when the customer is declining", () => {
+    const res = postProcessResponse(
+      checkoutResponse({
+        reply: "Sem problema, fico à disposição.",
+        intent: "OTHER",
+        nextStage: SalesStage.NEW_CONTACT,
+        wantsCheckout: false,
+        purchaseIntent: false,
+        actions: [
+          { type: "SEND_TEXT", text: "Sem problema, fico à disposição." },
+        ],
+      }),
+      makeContext({
+        product: makeProduct({ checkoutUrl: REAL_URL }),
+        incomingMessage: { type: "TEXT", content: "não quero comprar agora" },
+      }),
+    );
+    expect(res.reply).not.toContain(REAL_URL);
+  });
+});
+
+describe("customerWantsCheckout", () => {
+  it("detects explicit link/buy requests (screenshot cases)", () => {
+    expect(customerWantsCheckout("Me mande o link")).toBe(true);
+    expect(customerWantsCheckout("Onde tá o link")).toBe(true);
+    expect(customerWantsCheckout("Por onde eu acho o link")).toBe(true);
+    expect(customerWantsCheckout("quero comprar")).toBe(true);
+    expect(customerWantsCheckout("como faço pra pagar?")).toBe(true);
+    expect(customerWantsCheckout("bora fechar")).toBe(true);
+  });
+
+  it("ignores non-checkout and declining messages", () => {
+    expect(customerWantsCheckout("Oi, tudo bem?")).toBe(false);
+    expect(customerWantsCheckout("qual a garantia?")).toBe(false);
+    expect(customerWantsCheckout("não quero comprar")).toBe(false);
+  });
+});
+
+describe("isCheckoutDeflection", () => {
+  it("flags refusals and 'go to the site' replies", () => {
+    expect(
+      isCheckoutDeflection("não consigo enviar links diretamente"),
+    ).toBe(true);
+    expect(isCheckoutDeflection("Procure pelo produto no nosso site")).toBe(
+      true,
+    );
+    expect(isCheckoutDeflection("não tenho como fornecer um link direto")).toBe(
+      true,
+    );
+  });
+
+  it("does not flag a normal confirmation", () => {
+    expect(
+      isCheckoutDeflection("Perfeito! Aqui está o link para finalizar:"),
+    ).toBe(false);
   });
 });
