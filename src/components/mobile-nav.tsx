@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { logout } from "@/app/(dashboard)/logout-action";
 
@@ -11,12 +12,21 @@ import { NAV_ITEMS } from "./nav";
 /**
  * Mobile-only navigation: a hamburger button that opens a slide-over drawer
  * with the same nav items as the desktop sidebar. Hidden on `md+` (the desktop
- * sidebar takes over). Closes on route change, on backdrop tap, and on Escape,
- * and locks background scroll while open.
+ * sidebar takes over).
+ *
+ * The overlay (backdrop + drawer) is rendered through a portal into
+ * `document.body`. This is essential: an ancestor with `backdrop-filter`
+ * (the sticky header uses `backdrop-blur`), `transform` or `filter` would
+ * otherwise become the containing block for our `position: fixed` elements,
+ * clipping the drawer to the header instead of the viewport.
  */
 export function MobileNav({ userLabel }: { userLabel: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Portals need the DOM; only render the overlay after mount.
+  useEffect(() => setMounted(true), []);
 
   // Close the drawer whenever the route changes.
   useEffect(() => {
@@ -38,44 +48,22 @@ export function MobileNav({ userLabel }: { userLabel: string }) {
     };
   }, [open]);
 
-  return (
+  const overlay = (
     <div className="md:hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Abrir menu"
-        aria-expanded={open}
-        className="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 active:bg-slate-200"
-      >
-        <svg
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          <path d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
       {/* Backdrop */}
       <div
         onClick={() => setOpen(false)}
         aria-hidden={!open}
-        className={`fixed inset-0 z-40 bg-slate-900/40 transition-opacity duration-200 ${
+        className={`fixed inset-0 z-[60] bg-slate-900/50 transition-opacity duration-200 ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
 
       {/* Drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[82%] flex-col bg-white shadow-xl transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-[70] flex w-72 max-w-[82%] flex-col bg-white shadow-xl transition-transform duration-200 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
         role="dialog"
         aria-modal="true"
         aria-label="Menu de navegação"
@@ -139,6 +127,33 @@ export function MobileNav({ userLabel }: { userLabel: string }) {
           </form>
         </div>
       </aside>
+    </div>
+  );
+
+  return (
+    <div className="md:hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Abrir menu"
+        aria-expanded={open}
+        className="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 active:bg-slate-200"
+      >
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {mounted ? createPortal(overlay, document.body) : null}
     </div>
   );
 }
