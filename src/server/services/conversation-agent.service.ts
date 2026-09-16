@@ -7,13 +7,19 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import { getProductOffers, resolveOfferIndex } from "@/lib/checkout";
 import { sanitizeCustomerText } from "@/server/ai/guardrails";
 import { SalesAgent, salesAgent } from "@/server/ai/sales-agent";
-import { AiUnavailableError, type AgentResponse } from "@/server/ai/types";
+import {
+  AiUnavailableError,
+  type AgentContext,
+  type AgentResponse,
+} from "@/server/ai/types";
 import { prisma } from "@/server/db/prisma";
 import { logger } from "@/server/logger/logger";
 
 import { appendMessage } from "./message.service";
+import { createAssistedOrder } from "./order.service";
 
 /**
  * Orchestrates a single customer turn inside a test conversation:
@@ -121,9 +127,17 @@ export async function runCustomerTurn(
       handoffReason: response.handoffReason ?? null,
       dataToCollect: response.dataToCollect,
       purchaseIntent: response.purchaseIntent,
+      assistedPurchase: response.assistedPurchase ?? false,
       usedKnowledgeIds: response.usedKnowledgeIds,
       confidence: response.confidence ?? null,
     };
+
+    // Assisted order: the customer asked the bot to place/schedule for them and
+    // provided their address. Register a pending order (best-effort — never let
+    // this fail the turn) so a human can complete the Logzz scheduling.
+    if (response.assistedOrderReady && (response.collectedAddress ?? "").trim()) {
+      await registerAssistedOrder(conversationId, context, response);
+    }
 
     const agentMessage = await appendMessage({
       conversationId,
@@ -166,5 +180,44 @@ export async function runCustomerTurn(
       message: FRIENDLY_AI_ERROR,
       customerMessage,
     };
+  }
+}
+
+/**
+ * Register the assisted order from the collected address. Resolves the chosen
+ * offer (for label + amount) and stores it as a pending order. Best-effort: any
+ * failure is logged but never breaks the customer turn.
+ */
+async function registerAssistedOrder(
+  conversationId: string,
+  context: AgentContext,
+  response: AgentResponse,
+): Promise<void> {
+  try {
+    const offers = getProductOffers(context.product);
+    const idx = resolveOfferIndex(
+      offers,
+      response.checkoutOptionIndex ?? null,
+      context.incomingMessage.content,
+    );
+    const chosen = idx >= 0 ? offers[idx] : undefined;
+
+    await createAssistedOrder({
+      customerId: context.customer.id,
+      productId: context.product?.id ?? null,
+      conversationId,
+      address: (response.collectedAddress ?? "").trim(),
+      optionLabel: chosen?.label ?? null,
+      amountCents: chosen?.priceCents ?? context.product?.priceCents ?? 0,
+      currency: context.product?.currency ?? "BRL",
+    });
+    logger.info("conversation-agent", "Assisted order registered", {
+      conversationId,
+    });
+  } catch (error) {
+    logger.error("conversation-agent", "Failed to register assisted order", {
+      conversationId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
   }
 }

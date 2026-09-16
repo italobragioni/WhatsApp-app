@@ -5,6 +5,7 @@ import {
   buildDeliveryContext,
   buildSystemPrompt,
   computeAvailableActions,
+  customerWantsAssistedOrder,
   customerWantsCheckout,
   isCheckoutDeflection,
   postProcessResponse,
@@ -338,6 +339,77 @@ describe("multiple checkout options", () => {
     expect(res.reply).toContain("1 unidade");
     expect(res.reply).toContain("2 unidades");
     expect(res.actions.some((a) => a.type === "SEND_CHECKOUT")).toBe(false);
+  });
+});
+
+describe("assisted order / agendamento", () => {
+  const REAL_URL = "https://entrega.logzz.com.br/oferta-2vpro";
+
+  function assistedBase(overrides: Partial<AgentResponse> = {}): AgentResponse {
+    return {
+      reply:
+        "Desculpe, mas não consigo fazer a compra por você. Acesse nosso site.",
+      intent: "HUMAN_REQUEST",
+      nextStage: SalesStage.ANSWERING_QUESTION,
+      actions: [{ type: "SEND_TEXT", text: "..." }],
+      requiresHumanHandoff: false,
+      dataToCollect: [],
+      purchaseIntent: false,
+      usedKnowledgeIds: [],
+      ...overrides,
+    };
+  }
+
+  it("detects assisted-order requests from the customer's message", () => {
+    expect(
+      customerWantsAssistedOrder("Se eu te mandar o endereço você faz pra mim?"),
+    ).toBe(true);
+    expect(customerWantsAssistedOrder("não sei comprar no link")).toBe(true);
+    expect(customerWantsAssistedOrder("não consigo pelo link")).toBe(true);
+    expect(customerWantsAssistedOrder("qual a garantia?")).toBe(false);
+  });
+
+  it("never refuses: replaces the refusal and asks for the address", () => {
+    const res = postProcessResponse(
+      assistedBase(),
+      makeContext({
+        product: makeProduct({ checkoutUrl: REAL_URL }),
+        incomingMessage: {
+          type: "TEXT",
+          content: "Se eu te mandar o endereço você faz pra mim?",
+        },
+      }),
+    );
+    // No refusal, no link injected, and it asks for the address.
+    expect(res.reply.toLowerCase()).not.toContain("não consigo");
+    expect(res.reply).not.toContain(REAL_URL);
+    expect(res.reply.toLowerCase()).toContain("endereço");
+    expect(res.actions.some((a) => a.type === "REQUEST_CUSTOMER_DATA")).toBe(
+      true,
+    );
+    expect(res.requiresHumanHandoff).toBe(false);
+  });
+
+  it("registers + hands off once the address is provided", () => {
+    const res = postProcessResponse(
+      assistedBase({
+        assistedPurchase: true,
+        assistedOrderReady: true,
+        collectedAddress: "Rua X, 123, Centro, Belo Horizonte/MG, 30000-000",
+        reply: "",
+      }),
+      makeContext({
+        product: makeProduct({ checkoutUrl: REAL_URL }),
+        incomingMessage: {
+          type: "TEXT",
+          content: "meu endereço é Rua X, 123, Centro, BH/MG, 30000-000",
+        },
+      }),
+    );
+    expect(res.requiresHumanHandoff).toBe(true);
+    expect(res.nextStage).toBe(SalesStage.HANDOFF_HUMAN);
+    expect(res.reply.toLowerCase()).toContain("agendamento");
+    expect(res.reply).not.toContain(REAL_URL);
   });
 });
 

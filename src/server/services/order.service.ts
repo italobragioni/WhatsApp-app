@@ -64,3 +64,49 @@ export async function updateOrderStatus(
 ): Promise<Order> {
   return prisma.order.update({ where: { id }, data: { status } });
 }
+
+export interface CreateAssistedOrderInput {
+  customerId: string;
+  productId?: string | null;
+  conversationId: string;
+  address: string;
+  optionLabel?: string | null;
+  amountCents?: number;
+  currency?: string;
+}
+
+/**
+ * Register an ASSISTED order: the customer asked the bot to place/schedule the
+ * order for them (they won't use the link). We capture the delivery address and
+ * mark it for a human to complete the Logzz scheduling. It is idempotent per
+ * conversation — a second "ready" turn won't create a duplicate.
+ */
+export async function createAssistedOrder(
+  input: CreateAssistedOrderInput,
+): Promise<Order | null> {
+  const existing = await prisma.order.findFirst({
+    where: {
+      conversationId: input.conversationId,
+      metadata: { path: ["source"], equals: "assistido" },
+    },
+  });
+  if (existing) return existing;
+
+  return prisma.order.create({
+    data: {
+      customerId: input.customerId,
+      productId: input.productId ?? undefined,
+      conversationId: input.conversationId,
+      amountCents: input.amountCents ?? 0,
+      currency: input.currency ?? "BRL",
+      // Local draft: registered by the agent, pending a human to schedule in Logzz.
+      status: OrderStatus.DRAFT,
+      deliveryData: { address: input.address },
+      metadata: {
+        source: "assistido",
+        situacao: "aguardando_agendamento",
+        optionLabel: input.optionLabel ?? null,
+      },
+    },
+  });
+}

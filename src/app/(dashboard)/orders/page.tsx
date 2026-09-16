@@ -32,13 +32,18 @@ export default async function OrdersPage() {
             </thead>
             <tbody>
               {orders.map((order) => {
-                const source =
+                const rawSource =
                   order.metadata &&
                   typeof order.metadata === "object" &&
-                  !Array.isArray(order.metadata) &&
-                  (order.metadata as Record<string, unknown>).source === "logzz"
+                  !Array.isArray(order.metadata)
+                    ? (order.metadata as Record<string, unknown>).source
+                    : null;
+                const source =
+                  rawSource === "logzz"
                     ? "LOGZZ"
-                    : "—";
+                    : rawSource === "assistido"
+                      ? "ASSISTIDO"
+                      : "—";
                 return (
                   <tr key={order.id} className="border-t">
                     <td className="px-4 py-3">
@@ -52,7 +57,7 @@ export default async function OrdersPage() {
                       <Badge>{order.status}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      {source === "LOGZZ" ? <Badge>LOGZZ</Badge> : "—"}
+                      {source !== "—" ? <Badge>{source}</Badge> : "—"}
                     </td>
                     <td className="px-4 py-3 text-slate-500">
                       {order.externalId ?? "—"}

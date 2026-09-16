@@ -36,6 +36,11 @@ export const modelOutputSchema = z.object({
   // Which checkout offer the customer wants (0-based index), when the product
   // lists multiple options. null = not yet decided (ask the customer).
   checkout_option: z.number().int().min(0).nullable().default(null),
+  // Assisted order: the customer wants the bot to place/schedule the order for
+  // them (won't use the link / doesn't know how). Collect the address instead.
+  assisted_purchase: z.boolean().default(false),
+  assisted_order_ready: z.boolean().default(false),
+  collected_address: z.string().max(2000).nullable().default(null),
   used_knowledge_ids: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).optional(),
 });
@@ -54,12 +59,16 @@ export const MODEL_OUTPUT_INSTRUCTIONS = `Responda SEMPRE com um único objeto J
   "purchase_intent": boolean,
   "wants_checkout": boolean,             // true apenas se o cliente quer comprar agora
   "checkout_option": number|null,        // índice (0,1,...) da opção de checkout escolhida; null se ainda não decidido
+  "assisted_purchase": boolean,          // true se o cliente quer que VOCÊ faça/agende o pedido por ele
+  "assisted_order_ready": boolean,       // true quando já tem o endereço completo para registrar o pedido
+  "collected_address": string|null,      // endereço completo informado pelo cliente (rua, número, bairro, cidade/UF, CEP)
   "used_knowledge_ids": string[],        // ids dos itens de conhecimento usados
   "confidence": number                   // 0..1 (opcional)
 }
 NUNCA escreva URLs, links ou markdown de link (como [texto](#)) no campo "reply", e NUNCA diga que "não consegue enviar o link", que o cliente deve "procurar/buscar o produto no site" ou "acessar o site" — isso está ERRADO e não existe. Você não escreve o link, mas o SISTEMA anexa automaticamente o link OFICIAL de checkout do produto ao final da sua resposta.
 Quando o cliente demonstrar intenção de compra OU pedir o link, perguntar onde/como comprar ou como pagar: defina "wants_checkout": true e "intent": "PURCHASE_INTENT", e escreva uma confirmação curta e calorosa como "Perfeito! Aqui está o link para você finalizar sua compra:" (sem escrever o link — o sistema o adiciona).
-OPÇÕES DE CHECKOUT: se o produto listar MAIS DE UMA opção (ex.: [0] 1 unidade, [1] 2 unidades), identifique qual o cliente quer e coloque o índice em "checkout_option". Se ainda não estiver claro qual opção, NÃO escolha: mantenha "checkout_option": null, apresente as opções com seus preços e pergunte qual ele prefere. Havendo apenas uma opção, use "checkout_option": 0.`;
+OPÇÕES DE CHECKOUT: se o produto listar MAIS DE UMA opção (ex.: [0] 1 unidade, [1] 2 unidades), identifique qual o cliente quer e coloque o índice em "checkout_option". Se ainda não estiver claro qual opção, NÃO escolha: mantenha "checkout_option": null, apresente as opções com seus preços e pergunte qual ele prefere. Havendo apenas uma opção, use "checkout_option": 0.
+PEDIDO ASSISTIDO / AGENDAMENTO: se o cliente NÃO quiser comprar pelo link, não souber comprar, ou pedir para VOCÊ fazer/agendar o pedido por ele (ex.: "você faz pra mim?", "não sei comprar", "não consigo pelo link"), NUNCA recuse. Diga com naturalidade que você mesmo registra o pedido e agenda a entrega para ele, e defina "assisted_purchase": true. Peça o que faltar em "data_to_collect": nome completo, endereço completo (rua, número, bairro, cidade/UF) e CEP (e confirme a opção, se houver mais de uma). Quando o cliente já tiver informado o endereço completo, defina "assisted_order_ready": true e coloque o endereço em "collected_address", confirmando que o pedido foi registrado e que a equipe fará o agendamento da entrega — NUNCA invente data ou horário de entrega.`;
 
 /**
  * Map a validated model output + context into the structured AgentResponse,
@@ -113,6 +122,9 @@ export function mapModelOutput(
     purchaseIntent: raw.purchase_intent,
     wantsCheckout: raw.wants_checkout,
     checkoutOptionIndex: raw.checkout_option,
+    assistedPurchase: raw.assisted_purchase,
+    assistedOrderReady: raw.assisted_order_ready,
+    collectedAddress: raw.collected_address,
     usedKnowledgeIds: raw.used_knowledge_ids,
     confidence: raw.confidence,
   };

@@ -121,6 +121,14 @@ export interface AgentResponse {
    *  has multiple options. The app maps this to the real URL; -1/undefined means
    *  "not chosen" and the app asks the customer which option they want. */
   checkoutOptionIndex?: number | null;
+  /** The customer wants the bot to place/schedule the order for them (they don't
+   *  want to use the link or don't know how). The bot collects the address. */
+  assistedPurchase?: boolean;
+  /** The delivery address has been collected and the assisted order can be
+   *  registered (the app creates a pending order + hands off for scheduling). */
+  assistedOrderReady?: boolean;
+  /** The full delivery address gathered from the customer (their own data). */
+  collectedAddress?: string | null;
   /** IDs of knowledge items the answer was grounded on (auditability). */
   usedKnowledgeIds: string[];
   /** Model confidence 0..1, when the provider supplies it. */
