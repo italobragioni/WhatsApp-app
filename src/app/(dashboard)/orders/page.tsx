@@ -18,7 +18,7 @@ export default async function OrdersPage() {
         <EmptyState title="Nenhum pedido registrado" />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-white">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">Cliente</th>
@@ -45,7 +45,7 @@ export default async function OrdersPage() {
                       {order.customer.name ?? order.customer.phone}
                     </td>
                     <td className="px-4 py-3">{order.product?.name ?? "—"}</td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       {formatPriceCents(order.amountCents, order.currency)}
                     </td>
                     <td className="px-4 py-3">
@@ -57,7 +57,7 @@ export default async function OrdersPage() {
                     <td className="px-4 py-3 text-slate-500">
                       {order.externalId ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-500">
+                    <td className="whitespace-nowrap px-4 py-3 text-slate-500">
                       {order.updatedAt.toLocaleString("pt-BR")}
                     </td>
                   </tr>

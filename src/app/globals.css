@@ -16,12 +16,40 @@
   --muted: #64748b;
 }
 
+html {
+  /* Never let mobile browsers auto-inflate text on rotate/reflow. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body {
   background: var(--background);
   color: var(--foreground);
 }
 
+body {
+  /* A professional app never scrolls sideways on a phone. */
+  overflow-x: hidden;
+}
+
 * {
   border-color: var(--border);
+}
+
+/*
+ * Prevent iOS Safari from zooming in when a form field gets focus: any control
+ * smaller than 16px triggers that auto-zoom. This rule is intentionally kept
+ * OUTSIDE Tailwind's @layer, so it wins over utilities like `text-sm`, and is
+ * scoped to small screens to preserve the denser desktop typography.
+ */
+@media (max-width: 639.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="color"]
+    ),
+  textarea,
+  select {
+    font-size: 16px;
+    line-height: 1.5;
+  }
 }

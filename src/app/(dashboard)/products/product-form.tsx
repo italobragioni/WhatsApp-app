@@ -108,7 +108,7 @@ export function ProductForm({
   return (
     <form
       action={formAction}
-      className="space-y-4 rounded-xl border bg-white p-6"
+      className="space-y-4 rounded-xl border bg-white p-4 sm:p-6"
     >
       {p ? <input type="hidden" name="id" value={p.id} /> : null}
 
@@ -209,17 +209,17 @@ export function ProductForm({
         </p>
       ) : null}
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <button
           type="submit"
           disabled={pending || anyOver}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
+          className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60 sm:w-auto sm:py-2"
         >
           {pending ? "Salvando..." : submitLabel}
         </button>
         <Link
           href={cancelHref}
-          className="rounded-lg border px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+          className="w-full rounded-lg border px-4 py-2.5 text-center text-sm text-slate-600 transition hover:bg-slate-50 sm:w-auto sm:py-2"
         >
           Cancelar
         </Link>

@@ -9,7 +9,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r bg-white">
+    <aside className="hidden w-60 shrink-0 flex-col border-r bg-white md:flex">
       <div className="px-6 py-5">
         <span className="text-xl font-bold tracking-tight text-brand-700">
           VENDEIA

@@ -28,7 +28,7 @@ export default async function NewConversationPage() {
 
       <form
         action={createTestConversationAction}
-        className="space-y-4 rounded-xl border bg-white p-6"
+        className="space-y-4 rounded-xl border bg-white p-4 sm:p-6"
       >
         <div className="space-y-1">
           <label htmlFor="customerName" className="block text-sm font-medium">
@@ -81,7 +81,7 @@ export default async function NewConversationPage() {
 
         <button
           type="submit"
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+          className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 sm:w-auto sm:py-2"
         >
           Criar conversa
         </button>

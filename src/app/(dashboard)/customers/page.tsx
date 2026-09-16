@@ -16,8 +16,8 @@ export default async function CustomersPage() {
       {customers.length === 0 ? (
         <EmptyState title="Nenhum cliente cadastrado" />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border bg-white">
+          <table className="w-full min-w-[520px] text-sm">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">Nome</th>
@@ -30,7 +30,7 @@ export default async function CustomersPage() {
               {customers.map((c) => (
                 <tr key={c.id} className="border-t">
                   <td className="px-4 py-3">{c.name ?? "—"}</td>
-                  <td className="px-4 py-3">{c.phone}</td>
+                  <td className="whitespace-nowrap px-4 py-3">{c.phone}</td>
                   <td className="px-4 py-3">{c.city ?? "—"}</td>
                   <td className="px-4 py-3">{c.state ?? "—"}</td>
                 </tr>
